@@ -1,4 +1,4 @@
-## Go Showcase API
+## Go Showcase API - Learning Go
 
 This is a Go API which incorporates the following features:
 
@@ -10,3 +10,4 @@ This is a Go API which incorporates the following features:
 | 📦 Database Connection  | ⏳  |
 | 💾 Caching  | ⏳  |
 | 🥡 Containerization  | ⏳  |
+| 🚫 Secret Management  | ⏳  |
