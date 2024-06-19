@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
@@ -25,9 +26,9 @@ func (s *APIServer) Run() {
 	router := mux.NewRouter()
 	router.HandleFunc("/weather", makeHTTPHandleFunc(s.handleWeatherReport))
 
-	router.HandleFunc("/weather/{id}", makeHTTPHandleFunc(s.handleGetWeatherReportById))
+	router.HandleFunc("/weather/{id}", makeHTTPHandleFunc(s.handleWeatherReportById))
 
-	log.Println("Json API running om port: ", s.listenAddr)
+	log.Println("Json API running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
 }
 
@@ -41,9 +42,6 @@ func (s *APIServer) handleWeatherReport(w http.ResponseWriter, r *http.Request) 
 	}
 	if r.Method == "UPDATE" {
 		return s.handleCreateWeatherReport(w, r)
-	}
-	if r.Method == "DELETE" {
-		return s.handleDeleteWeatherReport(w, r)
 	}
 	return fmt.Errorf("method not allowed %s", r.Method)
 }
@@ -59,10 +57,26 @@ func (s *APIServer) handleGetWeatherReports(w http.ResponseWriter, r *http.Reque
 }
 
 // Get singular weather report based on id
+func (s *APIServer) handleWeatherReportById(w http.ResponseWriter, r *http.Request) error {
+	if r.Method == "GET" {
+		return s.handleGetWeatherReportById(w, r)
+	}
+	if r.Method == "DELETE" {
+		return s.handleDeleteWeatherReport(w, r)
+	}
+	return fmt.Errorf("invalid request")
+}
+
+// Get singular weather report based on id
 func (s *APIServer) handleGetWeatherReportById(w http.ResponseWriter, r *http.Request) error {
-	id := mux.Vars(r)["id"]
-	println(id)
-	weatherReport := NewWeatherReport("Sunny!", 2, 0.1)
+	uid, err := getUUIDFromString(mux.Vars(r)["id"])
+	if err != nil {
+		return err
+	}
+	weatherReport, err := s.store.GetWeatherReportByID(uid)
+	if err != nil {
+		return err
+	}
 	return writeJson(w, http.StatusOK, weatherReport)
 }
 
@@ -84,7 +98,15 @@ func (s *APIServer) handleUpdateWeatherReport(w http.ResponseWriter, r *http.Req
 }
 
 func (s *APIServer) handleDeleteWeatherReport(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	uid, err := getUUIDFromString(mux.Vars(r)["id"])
+	if err != nil {
+		return err
+	}
+
+	if err := s.store.DeleteWeatherReport(uid); err != nil {
+		return err
+	}
+	return writeJson(w, http.StatusOK, map[string]uuid.UUID{"deleted": uid})
 }
 
 func writeJson(w http.ResponseWriter, status int, v any) error {
@@ -96,7 +118,7 @@ func writeJson(w http.ResponseWriter, status int, v any) error {
 type apiFunction func(http.ResponseWriter, *http.Request) error
 
 type apiError struct {
-	Error string
+	Error string `json:"error"`
 }
 
 // Acts as a wrapper function for HTTP calls
@@ -107,4 +129,13 @@ func makeHTTPHandleFunc(f apiFunction) http.HandlerFunc {
 			writeJson(w, http.StatusBadRequest, apiError{Error: err.Error()})
 		}
 	}
+}
+
+// Helper function to return an appropriate error
+func getUUIDFromString(idString string) (uuid.UUID, error) {
+	uid, err := uuid.Parse(idString)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid uuid given '%s'", idString)
+	}
+	return uid, nil
 }

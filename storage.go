@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -12,7 +13,7 @@ type Storage interface {
 	DeleteWeatherReport(uuid.UUID) error
 	UpdateWeatherReport(*WeatherReport) error
 	GetWeatherReports() ([]*WeatherReport, error)
-	GetWeatherReportByID(uuid.UUID) error
+	GetWeatherReportByID(id uuid.UUID) (*WeatherReport, error)
 }
 
 type PostgresStore struct {
@@ -63,16 +64,25 @@ func (s *PostgresStore) CreateWeatherReport(w *WeatherReport) error {
 	return nil
 }
 
-func (s *PostgresStore) GetWeatherReportByID(uuid.UUID) error {
-	return nil
+func (s *PostgresStore) GetWeatherReportByID(id uuid.UUID) (*WeatherReport, error) {
+	rows, err := s.db.Query("select * from weatherreports where id = $1", id)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		return scanIntoWeatherReport(rows)
+	}
+	return nil, fmt.Errorf("weather report '%s' not found", id.String())
 }
 
 func (s *PostgresStore) UpdateWeatherReport(*WeatherReport) error {
+
 	return nil
 }
 
-func (s *PostgresStore) DeleteWeatherReport(uuid.UUID) error {
-	return nil
+func (s *PostgresStore) DeleteWeatherReport(id uuid.UUID) error {
+	_, err := s.db.Query("delete from weatherreports where id = $1", id)
+	return err
 }
 
 func (s *PostgresStore) GetWeatherReports() ([]*WeatherReport, error) {
@@ -83,6 +93,16 @@ func (s *PostgresStore) GetWeatherReports() ([]*WeatherReport, error) {
 	}
 
 	println(rows)
+	reports, err := scanIntoWeatherReports(rows)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return reports, nil
+}
+
+func scanIntoWeatherReports(rows *sql.Rows) ([]*WeatherReport, error) {
 	reports := []*WeatherReport{}
 	for rows.Next() {
 		report := new(WeatherReport)
@@ -92,6 +112,11 @@ func (s *PostgresStore) GetWeatherReports() ([]*WeatherReport, error) {
 		}
 		reports = append(reports, report)
 	}
-
 	return reports, nil
+}
+
+func scanIntoWeatherReport(rows *sql.Rows) (*WeatherReport, error) {
+	report := new(WeatherReport)
+	err := rows.Scan(&report.ID, &report.Description, &report.Temperature, &report.RainChance, &report.CreatedAt)
+	return report, err
 }
