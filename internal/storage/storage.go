@@ -1,27 +1,29 @@
-package main
+package storage
 
 import (
 	"database/sql"
 	"fmt"
 
+	"github.com/MattBabbage/GoShowcaseAPI/internal/types"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 )
 
 type Storage interface {
-	CreateWeatherReport(*WeatherReport) error
+	CreateWeatherReport(*types.WeatherReport) error
 	DeleteWeatherReport(uuid.UUID) error
-	UpdateWeatherReport(*WeatherReport) error
-	GetWeatherReports() ([]*WeatherReport, error)
-	GetWeatherReportByID(id uuid.UUID) (*WeatherReport, error)
+	UpdateWeatherReport(*types.WeatherReport) error
+	GetWeatherReports() ([]*types.WeatherReport, error)
+	GetWeatherReportByID(id uuid.UUID) (*types.WeatherReport, error)
 }
 
 type PostgresStore struct {
 	db *sql.DB
 }
 
-func NewPostgressStore() (*PostgresStore, error) {
-	connStr := "user=postgres dbname=postgres password=mysecretpassword sslmode=disable"
+func NewPostgressStore(connectionString string) (*PostgresStore, error) {
+	println(connectionString)
+	connStr := connectionString
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
@@ -51,7 +53,7 @@ func (s *PostgresStore) createWeatherReportTable() error {
 	return err
 }
 
-func (s *PostgresStore) CreateWeatherReport(w *WeatherReport) error {
+func (s *PostgresStore) CreateWeatherReport(w *types.WeatherReport) error {
 	query :=
 		`insert into weatherreports
 		(id, description, temperature, chance_rain, created_at)
@@ -64,7 +66,7 @@ func (s *PostgresStore) CreateWeatherReport(w *WeatherReport) error {
 	return nil
 }
 
-func (s *PostgresStore) GetWeatherReportByID(id uuid.UUID) (*WeatherReport, error) {
+func (s *PostgresStore) GetWeatherReportByID(id uuid.UUID) (*types.WeatherReport, error) {
 	rows, err := s.db.Query("select * from weatherreports where id = $1", id)
 	if err != nil {
 		return nil, err
@@ -75,9 +77,14 @@ func (s *PostgresStore) GetWeatherReportByID(id uuid.UUID) (*WeatherReport, erro
 	return nil, fmt.Errorf("weather report '%s' not found", id.String())
 }
 
-func (s *PostgresStore) UpdateWeatherReport(*WeatherReport) error {
-
-	return nil
+func (s *PostgresStore) UpdateWeatherReport(w *types.WeatherReport) error {
+	query :=
+		`update weatherreports set
+	(description, temperature, chance_rain, created_at)
+	values ($2, $3, $4, $5) where id = $1`
+	resp, err := s.db.Query(query, w.ID, w.Description, w.Temperature, w.RainChance, w.CreatedAt)
+	println(resp)
+	return err
 }
 
 func (s *PostgresStore) DeleteWeatherReport(id uuid.UUID) error {
@@ -85,7 +92,7 @@ func (s *PostgresStore) DeleteWeatherReport(id uuid.UUID) error {
 	return err
 }
 
-func (s *PostgresStore) GetWeatherReports() ([]*WeatherReport, error) {
+func (s *PostgresStore) GetWeatherReports() ([]*types.WeatherReport, error) {
 	rows, err := s.db.Query("select * from weatherreports")
 
 	if err != nil {
@@ -102,10 +109,10 @@ func (s *PostgresStore) GetWeatherReports() ([]*WeatherReport, error) {
 	return reports, nil
 }
 
-func scanIntoWeatherReports(rows *sql.Rows) ([]*WeatherReport, error) {
-	reports := []*WeatherReport{}
+func scanIntoWeatherReports(rows *sql.Rows) ([]*types.WeatherReport, error) {
+	reports := []*types.WeatherReport{}
 	for rows.Next() {
-		report := new(WeatherReport)
+		report := new(types.WeatherReport)
 		err := rows.Scan(&report.ID, &report.Description, &report.Temperature, &report.RainChance, &report.CreatedAt)
 		if err != nil {
 			return nil, err
@@ -115,8 +122,8 @@ func scanIntoWeatherReports(rows *sql.Rows) ([]*WeatherReport, error) {
 	return reports, nil
 }
 
-func scanIntoWeatherReport(rows *sql.Rows) (*WeatherReport, error) {
-	report := new(WeatherReport)
+func scanIntoWeatherReport(rows *sql.Rows) (*types.WeatherReport, error) {
+	report := new(types.WeatherReport)
 	err := rows.Scan(&report.ID, &report.Description, &report.Temperature, &report.RainChance, &report.CreatedAt)
 	return report, err
 }

@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"encoding/json"
@@ -6,16 +6,18 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/MattBabbage/GoShowcaseAPI/internal/storage"
+	"github.com/MattBabbage/GoShowcaseAPI/internal/types"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
 
 type APIServer struct {
 	listenAddr string
-	store      Storage
+	store      storage.Storage
 }
 
-func NewAPIServer(listenAddr string, store Storage) *APIServer {
+func NewAPIServer(listenAddr string, store storage.Storage) *APIServer {
 	return &APIServer{
 		listenAddr: listenAddr,
 		store:      store,
@@ -81,11 +83,11 @@ func (s *APIServer) handleGetWeatherReportById(w http.ResponseWriter, r *http.Re
 }
 
 func (s *APIServer) handleCreateWeatherReport(w http.ResponseWriter, r *http.Request) error {
-	createRequest := new(CreateWeatherReportRequest)
+	createRequest := new(types.CreateWeatherReportRequest)
 	if err := json.NewDecoder(r.Body).Decode(&createRequest); err != nil {
 		return err
 	}
-	WeatherReport := NewWeatherReport(createRequest.Description, createRequest.Temperature, createRequest.RainChance)
+	WeatherReport := types.NewWeatherReport(createRequest.Description, createRequest.Temperature, createRequest.RainChance)
 	if err := s.store.CreateWeatherReport(WeatherReport); err != nil {
 		return err
 	}
@@ -94,7 +96,14 @@ func (s *APIServer) handleCreateWeatherReport(w http.ResponseWriter, r *http.Req
 }
 
 func (s *APIServer) handleUpdateWeatherReport(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	weatherReport := new(types.WeatherReport)
+	if err := json.NewDecoder(r.Body).Decode(&weatherReport); err != nil {
+		return err
+	}
+	if err := s.store.UpdateWeatherReport(weatherReport); err != nil {
+		return err
+	}
+	return writeJson(w, http.StatusOK, weatherReport)
 }
 
 func (s *APIServer) handleDeleteWeatherReport(w http.ResponseWriter, r *http.Request) error {
